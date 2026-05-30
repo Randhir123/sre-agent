@@ -1,7 +1,7 @@
 # SRE Agent
 
 An autonomous SRE agent that investigates infrastructure incidents using a
-ReAct (Reason + Act) loop powered by Claude. It starts with Kafka consumer
+ReAct (Reason + Act) loop powered by LLM. It starts with Kafka consumer
 rebalances but the tool layer is generic, so it extends to latency, OOM,
 disk pressure, etc. without code changes.
 
@@ -27,7 +27,7 @@ subprocess ever starts — the LLM cannot talk the executor into running
 ## Architecture
 
 ```
-  alert ─▶ Agent (ReAct loop) ─▶ Claude (reason) ─▶ tool call
+  alert ─▶ Agent (ReAct loop) ─▶ LLM (reason) ─▶ tool call
               ▲                                          │
               └──────────── tool result ◀───────────────┘
 
