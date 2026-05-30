@@ -36,13 +36,13 @@ metrics:
 # Format: https://<instance-guid>.api.<region>.logs.cloud.ibm.com
 #
 # From your connection properties:
-#   ICLogs.host = 0a5ca5b4-8187-4616-9dc1-9aa0af6b32d9.ingress.us-south.logs.cloud.ibm.com
-#   => IBM_LOGS_ENDPOINT = https://0a5ca5b4-8187-4616-9dc1-9aa0af6b32d9.api.us-south.logs.cloud.ibm.com
+#   ICLogs.host = <instance-guid>.ingress.us-south.logs.cloud.ibm.com
+#   => IBM_LOGS_ENDPOINT = https://<instance-guid>.api.us-south.logs.cloud.ibm.com
 #
 # The IBM_CLOUD_API_KEY env var authenticates the query (IAM token exchange).
 # Set both before running the agent:
 #   export IBM_CLOUD_API_KEY=...
-#   export IBM_LOGS_ENDPOINT=https://0a5ca5b4-8187-4616-9dc1-9aa0af6b32d9.api.us-south.logs.cloud.ibm.com
+#   export IBM_LOGS_ENDPOINT=https://<instance-guid>.api.us-south.logs.cloud.ibm.com
 
 # --- IBM Cloud Logs field reference ----------------------------------------
 # applicationName  = Kubernetes namespace (e.g. "si")
