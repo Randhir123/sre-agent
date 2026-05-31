@@ -1,7 +1,7 @@
 # SRE Agent
 
 An autonomous SRE agent that investigates infrastructure incidents using a
-ReAct (Reason + Act) loop powered by LLM. It starts with Kafka consumer
+ReAct (Reason + Act) loop powered by an LLM. It starts with Kafka consumer
 rebalances but the tool layer is generic, so it extends to latency, OOM,
 disk pressure, etc. without code changes.
 
@@ -14,7 +14,7 @@ disk pressure, etc. without code changes.
   for a human to review and run. No auto-execute.
 - **Generic tools, smart reasoning.** Tools are primitives (`kubectl_get`,
   `prometheus_query`, `get_logs`). The domain knowledge (what a Kafka rebalance
-  means, what `UNKNOWN_TOPIC_OR_PARTITION` implies) lives in Claude, not in
+  means, what `UNKNOWN_TOPIC_OR_PARTITION` implies) lives in the LLM, not in
   hardcoded if-statements.
 
 ## Safety model
