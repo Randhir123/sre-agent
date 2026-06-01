@@ -40,8 +40,10 @@ def _print_step(label: str, body: str = "") -> None:
         print(body)
 
 
-def _fmt_input(d: dict) -> str:
-    return "\n".join(f"  {k}: {v}" for k, v in d.items())
+def _fmt_input(d) -> str:
+    if isinstance(d, dict):
+        return "\n".join(f"  {k}: {v}" for k, v in d.items())
+    return f"  {d}"
 
 
 def _indent(text: str, n: int = 4) -> str:

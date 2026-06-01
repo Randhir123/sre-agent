@@ -193,7 +193,10 @@ def dispatch(tool_name: str, tool_input: dict, cfg: dict) -> str:
             return f"[prometheus error] {e}"
 
     if tool_name == "ibmcloud_es":
-        cmd = f"ibmcloud es {tool_input['args']}"
+        es_args = tool_input.get("args", "")
+        if not es_args:
+            return "[ibmcloud_es] missing args — specify a subcommand, e.g. 'groups' or 'group <id>'"
+        cmd = f"ibmcloud es {es_args}"
         return run_readonly(cmd).as_observation()
 
     return f"[error] unknown tool: {tool_name}"

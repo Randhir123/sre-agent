@@ -47,6 +47,71 @@ cp .env.example .env   # fill in your keys
 python main.py --alert "Kafka consumer rebalances spiking in namespace si"
 ```
 
+### IBM Cloud, Kubernetes, and Prometheus access
+
+Before running the agent, log in to IBM Cloud and target the appropriate
+account and resource group. The SSO login command starts a browser-based
+one-time passcode flow. Follow that flow and select the appropriate IBM Cloud
+account when prompted.
+
+```bash
+ibmcloud login --sso
+ibmcloud target -g <RESOURCE_GROUP_NAME_OR_ID>
+```
+
+Download the Kubernetes cluster configuration, then confirm that `kubectl`
+uses the intended context and can reach the cluster:
+
+```bash
+ibmcloud ks cluster config --cluster <CLUSTER_NAME>
+kubectl config current-context
+kubectl get nodes
+```
+
+Start the Prometheus port-forward in a separate terminal and keep it running
+while the agent runs:
+
+```bash
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+```
+
+Prometheus queries use the URL configured in `config.yaml`, commonly
+`http://localhost:9090`. If `--skip-preflight` is used, the agent may skip some
+checks, but Prometheus queries still need the port-forward when `config.yaml`
+points to `localhost:9090`.
+
+Run the agent from another terminal:
+
+```bash
+MODEL_PROVIDER=openai \
+MODEL=gpt-5.5 \
+python main.py \
+  --alert "Kafka consumer rebalances are spiking in namespace si for multi-system-processor. Investigate using read-only tools and produce evidence, likely root cause, remediation suggestions, and verification steps." \
+  --namespace si
+```
+
+The agent uses four distinct backend access paths:
+
+- **Kubernetes `kubectl` access:** `kubectl` tools use the active kubeconfig
+  context.
+- **IBM Cloud Logs API access:** log queries call the IBM Cloud Logs API
+  directly and do not require the Prometheus port-forward. Set
+  `IBM_CLOUD_API_KEY` and `IBM_LOGS_ENDPOINT`.
+- **IBM Event Streams CLI access:** Event Streams checks require the
+  `ibmcloud` CLI to be logged in and targeted to the correct account and
+  resource group.
+- **Prometheus access:** Prometheus queries require the URL configured in
+  `config.yaml` to be reachable, commonly through the local port-forward
+  above.
+
+#### Security and privacy
+
+Do not commit `.env` files, API keys, bearer tokens, kubeconfig files, account
+IDs, resource group IDs, cluster names, user emails, internal hostnames, or
+internal URLs. For public documentation and blog posts, use placeholders such
+as `<ACCOUNT>`, `<RESOURCE_GROUP_NAME_OR_ID>`, `<CLUSTER_NAME>`,
+`<IBM_LOGS_ENDPOINT>`, and `<NAMESPACE>`.
+
 ## Model providers
 
 The agent supports five provider backends. Set `MODEL_PROVIDER` explicitly, or

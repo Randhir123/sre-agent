@@ -87,6 +87,20 @@ def get_provider(provider_name: str):
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
+def _looks_like_final_report(text: str) -> bool:
+    """Return True if *text* looks like a plain-text SRE incident report."""
+    upper = text.upper()
+    return any(marker in upper for marker in (
+        "ROOT CAUSE",
+        "EVIDENCE",
+        "SUGGESTED FIX",
+        "REMEDIATION",
+        "VERIFICATION",
+        "PREVENTION",
+        "RULED OUT",
+    ))
+
+
 def _parse_json_loose(text: str) -> dict | None:
     """Extract the first JSON object from *text*; handle markdown fences."""
     text = text.strip()
@@ -381,15 +395,18 @@ _OLLAMA_TOOL_INSTRUCTIONS = """
 
 ## Response Format
 
-Respond with EXACTLY ONE JSON object and no other text.
+# Ollama/local models often fail JSON escaping for long final reports, so we
+# enforce JSON only for tool calls and allow plain-text final reports.
 
-To call a tool:
+When you need to call a tool, respond with EXACTLY ONE JSON object and nothing else:
 {{"tool": "tool_name", "args": {{...arguments...}}}}
 
-To give your final answer:
-{{"final": "your complete investigation report"}}
+When you have gathered enough information and are ready to give your final
+incident report, write it as plain text — no JSON wrapper required.
+Your plain-text report should include: evidence, root cause, confidence,
+remediation commands (for human review only), and verification steps.
 
-Do NOT include markdown fences, explanations, or any text outside the JSON object."""
+Do NOT wrap the final report in JSON. Only tool calls use JSON."""
 
 
 class OllamaProvider:
@@ -440,7 +457,7 @@ class OllamaProvider:
                 "stream": False,
                 "options": {"temperature": 0},
             },
-            timeout=180,
+            timeout=600,
         )
         resp.raise_for_status()
         return resp.json()["message"]["content"]
@@ -460,44 +477,15 @@ class OllamaProvider:
         content = self._chat(model, ollama_msgs)
         parsed = _parse_json_loose(content)
 
-        if parsed is None:
-            # One repair attempt
-            repair_msgs = ollama_msgs + [
-                {"role": "assistant", "content": content},
-                {
-                    "role": "user",
-                    "content": (
-                        "Your previous response was not valid JSON. "
-                        "Return exactly one JSON object:\n"
-                        '{"tool":"tool_name","args":{...}}\n'
-                        "or\n"
-                        '{"final":"your complete report"}'
-                    ),
-                },
-            ]
-            content = self._chat(model, repair_msgs)
-            parsed = _parse_json_loose(content)
-
-        if parsed is None:
-            return ModelTurn(
-                reasoning=(
-                    "[ollama: malformed JSON after repair attempt]\n"
-                    + content[:500]
-                ),
-                done=True,
-                tool_calls=[],
-            )
-
-        if "final" in parsed:
-            return ModelTurn(
-                reasoning=str(parsed["final"]), done=True, tool_calls=[]
-            )
-
-        if "tool" in parsed:
+        # ── Tool call (strict JSON required) ───────────────────────────────
+        if parsed is not None and "tool" in parsed:
+            args = parsed.get("args") or {}
+            if not isinstance(args, dict):
+                args = {}
             tc = ToolCall(
                 id=f"olla-{uuid.uuid4().hex[:8]}",
                 name=str(parsed["tool"]),
-                input=parsed.get("args") or {},
+                input=args,
             )
             return ModelTurn(
                 reasoning="",
@@ -506,8 +494,65 @@ class OllamaProvider:
                 assistant_message={"role": "assistant", "content": content},
             )
 
-        # JSON present but has neither "tool" nor "final" — treat as final answer
-        return ModelTurn(reasoning=content, done=True, tool_calls=[])
+        # ── {"final":"..."} wrapper (backward compatibility) ───────────────
+        if parsed is not None and "final" in parsed:
+            return ModelTurn(reasoning=str(parsed["final"]), done=True, tool_calls=[])
+
+        # ── Plain-text final report (local models escape poorly in JSON) ───
+        if parsed is None and _looks_like_final_report(content):
+            return ModelTurn(reasoning=content, done=True, tool_calls=[])
+
+        # ── JSON with neither "tool" nor "final" — treat as final ──────────
+        if parsed is not None:
+            return ModelTurn(reasoning=content, done=True, tool_calls=[])
+
+        # ── parsed is None and doesn't look like a final report yet ────────
+        # One repair attempt: ask for tool JSON or plain-text final report.
+        repair_msgs = ollama_msgs + [
+            {"role": "assistant", "content": content},
+            {
+                "role": "user",
+                "content": (
+                    "If you need to call a tool, return exactly one JSON object:\n"
+                    '{"tool":"tool_name","args":{...}}\n'
+                    "If you have finished your investigation, write the final "
+                    "incident report as plain text."
+                ),
+            },
+        ]
+        content = self._chat(model, repair_msgs)
+        parsed = _parse_json_loose(content)
+
+        if parsed is not None and "tool" in parsed:
+            args = parsed.get("args") or {}
+            if not isinstance(args, dict):
+                args = {}
+            tc = ToolCall(
+                id=f"olla-{uuid.uuid4().hex[:8]}",
+                name=str(parsed["tool"]),
+                input=args,
+            )
+            return ModelTurn(
+                reasoning="",
+                done=False,
+                tool_calls=[tc],
+                assistant_message={"role": "assistant", "content": content},
+            )
+
+        if parsed is not None and "final" in parsed:
+            return ModelTurn(reasoning=str(parsed["final"]), done=True, tool_calls=[])
+
+        if _looks_like_final_report(content):
+            return ModelTurn(reasoning=content, done=True, tool_calls=[])
+
+        return ModelTurn(
+            reasoning=(
+                "[ollama: malformed JSON after repair attempt]\n"
+                + content[:500]
+            ),
+            done=True,
+            tool_calls=[],
+        )
 
     def append_assistant_turn(self, messages: list, turn: ModelTurn) -> None:
         if turn.assistant_message:
