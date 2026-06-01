@@ -49,7 +49,7 @@ def _indent(text: str, n: int = 4) -> str:
     return "\n".join(pad + line for line in text.splitlines()[:60])
 
 
-def investigate(alert: str, cfg: dict, verbose: bool = True) -> str:
+def investigate(alert: str, cfg: dict, verbose: bool = True, recorder=None) -> str:
     """Run the investigation loop. Returns the model's final report text."""
     model = MODEL
     prov_name = _provider(model)
@@ -69,25 +69,43 @@ def investigate(alert: str, cfg: dict, verbose: bool = True) -> str:
         )
 
         # ── surface reasoning ───────────────────────────────────────────────
-        if verbose and turn.reasoning.strip():
-            _print_step(
-                f"[step {step}] reasoning ({prov_name}/{model})",
-                safe_output(turn.reasoning.strip()),
-            )
+        if turn.reasoning.strip():
+            if verbose:
+                _print_step(
+                    f"[step {step}] reasoning ({prov_name}/{model})",
+                    safe_output(turn.reasoning.strip()),
+                )
+            if recorder:
+                recorder.add_model_message(turn.reasoning)
 
         provider.append_assistant_turn(messages, turn)
 
         if turn.done:
-            return safe_output(turn.reasoning)
+            final = safe_output(turn.reasoning)
+            if recorder:
+                recorder.set_final_answer(final)
+                recorder.save()
+            return final
 
         # ── execute tool calls ──────────────────────────────────────────────
         results: list[tuple] = []
         for tc in turn.tool_calls:
             if verbose:
                 _print_step(f"[step {step}] tool: {tc.name}", _fmt_input(tc.input))
+            if recorder:
+                recorder.add_tool_call(tc.name, tc.input, safety_class="READ")
 
-            observation = dispatch(tc.name, tc.input, cfg)
-            observation = safe_output(observation)
+            try:
+                observation = dispatch(tc.name, tc.input, cfg)
+                observation = safe_output(observation)
+            except Exception as exc:
+                observation = f"[tool error] {exc}"
+                if recorder:
+                    recorder.add_tool_result(tc.name, observation, ok=False)
+                raise
+
+            if recorder:
+                recorder.add_tool_result(tc.name, observation, ok=True)
 
             if verbose:
                 print(f"\n  observation:\n{_indent(observation)}")
@@ -96,7 +114,11 @@ def investigate(alert: str, cfg: dict, verbose: bool = True) -> str:
 
         provider.append_tool_results(messages, results)
 
-    return (
+    msg = (
         "[investigation hit MAX_STEPS without a conclusion — "
         "widen limits or refine the alert]"
     )
+    if recorder:
+        recorder.set_final_answer(msg)
+        recorder.save()
+    return msg

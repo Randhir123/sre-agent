@@ -234,6 +234,12 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="path to config.yaml")
     parser.add_argument("--quiet", action="store_true", help="suppress step-by-step trace")
     parser.add_argument("--skip-preflight", action="store_true", help="skip preflight checks")
+    parser.add_argument("--record-trajectory", action="store_true",
+                        help="capture investigation trajectory to evals/runs/")
+    parser.add_argument("--scenario-id", default="manual",
+                        help="scenario label used in trajectory path (default: manual)")
+    parser.add_argument("--runs-dir", default="evals/runs",
+                        help="root directory for trajectory runs (default: evals/runs)")
     args = parser.parse_args()
 
     prov = _provider(MODEL)
@@ -266,16 +272,38 @@ def main():
 
     _ensure_prometheus(cfg)
 
+    # Optional trajectory recorder — only created when --record-trajectory is set
+    recorder = None
+    if args.record_trajectory:
+        from evals.trajectory import TrajectoryRecorder
+        recorder = TrajectoryRecorder(
+            scenario_id=args.scenario_id,
+            model=MODEL,
+            provider=prov,
+            alert=args.alert,
+            config={
+                "namespace": cfg.get("default_namespace"),
+                "prometheus_url": cfg.get("prometheus_url"),
+                "config_path": args.config,
+                "quiet": args.quiet,
+                "skip_preflight": args.skip_preflight,
+            },
+            out_dir=args.runs_dir,
+        )
+
     print(f"\nInvestigating: {args.alert}")
     print(f"   namespace : {cfg.get('default_namespace')}")
     print(f"   model     : {MODEL}  ({prov})")
 
-    report = investigate(args.alert, cfg, verbose=not args.quiet)
+    report = investigate(args.alert, cfg, verbose=not args.quiet, recorder=recorder)
 
     print("\n" + "=" * 70)
     print("FINAL REPORT")
     print("=" * 70)
     print(report)
+
+    if recorder and recorder.saved_path:
+        print(f"\nTrajectory saved: {recorder.saved_path}")
 
 
 if __name__ == "__main__":

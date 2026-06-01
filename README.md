@@ -86,6 +86,39 @@ OPENAI_COMPATIBLE_API_KEY=<key> \
 python main.py --alert "Kafka consumer rebalances spiking in namespace si"
 ```
 
+## Trajectory capture
+
+Record a full investigation for offline model evaluation:
+
+```bash
+MODEL_PROVIDER=openai MODEL=gpt-5.5 python main.py \
+  --alert "Kafka consumer rebalances spiking in namespace si for multi-system-processor" \
+  --namespace si \
+  --record-trajectory \
+  --scenario-id kafka_unknown_topic \
+  --skip-preflight
+```
+
+Trajectories are written under `evals/runs/` (git-ignored):
+
+```
+evals/runs/<scenario_id>/<provider>/<model>/<run_id>/trajectory.json
+evals/runs/<scenario_id>/<provider>/<model>/<run_id>/raw/
+```
+
+Score a run against the deterministic rubric:
+
+```bash
+python evals/verify_kafka_unknown_topic.py evals/runs/.../trajectory.json
+```
+
+Render a run to Markdown + Mermaid sequence diagram:
+
+```bash
+python evals/render_trajectory.py evals/runs/.../trajectory.json
+# → trajectory.md and trajectory.mmd written next to trajectory.json
+```
+
 ## Files
 
 - `main.py` — entrypoint / CLI

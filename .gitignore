@@ -12,3 +12,6 @@ build/
 .pytest_cache/
 .mypy_cache/
 *.pyc
+
+# Trajectory runs — local only, not tracked in git
+evals/runs/
