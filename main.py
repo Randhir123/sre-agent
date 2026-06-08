@@ -277,6 +277,8 @@ def main():
     cfg = load_config(args.config)
     if args.namespace:
         cfg["default_namespace"] = args.namespace
+        cfg["namespace_scope"] = args.namespace
+        cfg["namespace_locked"] = True
 
     if not args.skip_preflight:
         if not preflight(cfg):

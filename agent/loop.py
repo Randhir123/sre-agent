@@ -65,6 +65,16 @@ def investigate(
     provider = get_provider(prov_name)
     skill = selected_skill or classify_skill(alert)
     effective_system_prompt = SYSTEM_PROMPT + "\n\n" + skill_prompt(skill)
+    namespace_scope = cfg.get("namespace_scope")
+    if namespace_scope:
+        effective_system_prompt += (
+            "\n\n## Namespace scope\n"
+            f"The requested namespace scope is `{namespace_scope}`. Limit namespaced "
+            "Kubernetes and log investigation to this namespace. Do not try other "
+            "namespaces unless the alert explicitly asks for a cross-namespace "
+            "investigation or evidence from this namespace proves that a cluster-level "
+            "dependency must be checked."
+        )
 
     messages: list[dict] = [{"role": "user", "content": f"ALERT: {alert}"}]
 

@@ -141,9 +141,19 @@ def _filter_and_tail(text: str, grep: str | None, tail: int) -> str:
     return "\n".join(lines) if lines else "[no matching log lines]"
 
 
+def _namespace_for(tool_input: dict, cfg: dict) -> tuple[str, str]:
+    requested = tool_input.get("namespace")
+    if cfg.get("namespace_locked") and cfg.get("namespace_scope"):
+        scoped = cfg["namespace_scope"]
+        if requested and requested != scoped:
+            return scoped, f"[namespace scope enforced: requested '{requested}', using '{scoped}']\n"
+        return scoped, ""
+    return requested or cfg.get("default_namespace", ""), ""
+
+
 def dispatch(tool_name: str, tool_input: dict, cfg: dict) -> str:
     """Execute a tool call and return a text observation for the LLM."""
-    ns = tool_input.get("namespace") or cfg.get("default_namespace", "")
+    ns, namespace_note = _namespace_for(tool_input, cfg)
 
     if tool_name == "kubectl_get":
         cmd = f"kubectl get {tool_input['resource']} -n {ns} -o wide"
@@ -151,7 +161,7 @@ def dispatch(tool_name: str, tool_input: dict, cfg: dict) -> str:
             cmd += f" -l {tool_input['label_selector']}"
         if tool_input.get("extra_flags"):
             cmd += f" {tool_input['extra_flags']}"
-        return run_readonly(cmd).as_observation()
+        return namespace_note + run_readonly(cmd).as_observation()
 
     if tool_name == "kubectl_describe":
         cmd = f"kubectl describe {tool_input['resource']} -n {ns}"
@@ -159,7 +169,7 @@ def dispatch(tool_name: str, tool_input: dict, cfg: dict) -> str:
             cmd += f" {tool_input['name']}"
         elif tool_input.get("label_selector"):
             cmd += f" -l {tool_input['label_selector']}"
-        return run_readonly(cmd).as_observation()
+        return namespace_note + run_readonly(cmd).as_observation()
 
     if tool_name == "kubectl_logs":
         since = tool_input.get("since", "1h")
@@ -170,13 +180,13 @@ def dispatch(tool_name: str, tool_input: dict, cfg: dict) -> str:
             cmd += f" -l {tool_input['label_selector']}"
         result = run_readonly(cmd, timeout=90)
         if not result.ok and not result.stdout:
-            return result.as_observation()
-        return _filter_and_tail(
+            return namespace_note + result.as_observation()
+        return namespace_note + _filter_and_tail(
             result.stdout, tool_input.get("grep"), tool_input.get("tail", 100)
         )
 
     if tool_name == "query_logs":
-        return _query_logs(
+        return namespace_note + _query_logs(
             query=tool_input["query"],
             namespace=ns,
             app=tool_input.get("app"),

@@ -1,4 +1,5 @@
 from tools import registry
+from tools.runner import CommandResult
 
 
 def test_dispatch_forwards_query_logs_arguments(monkeypatch):
@@ -54,3 +55,41 @@ def test_dispatch_uses_query_logs_defaults(monkeypatch):
         "since_minutes": 60,
         "limit": 200,
     }
+
+
+def test_dispatch_enforces_locked_namespace_for_query_logs(monkeypatch):
+    received = {}
+
+    def fake_query_logs(**kwargs):
+        received.update(kwargs)
+        return "logs result"
+
+    monkeypatch.setattr(registry, "_query_logs", fake_query_logs)
+
+    result = registry.dispatch(
+        "query_logs",
+        {"query": "restart", "namespace": "default"},
+        {"default_namespace": "si", "namespace_scope": "si", "namespace_locked": True},
+    )
+
+    assert "namespace scope enforced" in result
+    assert received["namespace"] == "si"
+
+
+def test_dispatch_enforces_locked_namespace_for_kubectl_get(monkeypatch):
+    received = {}
+
+    def fake_run_readonly(cmd, timeout=60):
+        received["cmd"] = cmd
+        return CommandResult(ok=True, stdout="pods", stderr="")
+
+    monkeypatch.setattr(registry, "run_readonly", fake_run_readonly)
+
+    result = registry.dispatch(
+        "kubectl_get",
+        {"resource": "pods", "namespace": "default"},
+        {"default_namespace": "si", "namespace_scope": "si", "namespace_locked": True},
+    )
+
+    assert "namespace scope enforced" in result
+    assert received["cmd"] == "kubectl get pods -n si -o wide"
