@@ -208,30 +208,6 @@ evals/runs/manual_metric_analyser_startup/<provider>/<model>/<run_id>/trajectory
 evals/runs/manual_metric_analyser_startup/<provider>/<model>/<run_id>/raw/
 ```
 
-## Bob handoff workflow
-
-Use `--write-incident` when the SRE investigation should produce artifacts for
-a separate Bob code investigation:
-
-```bash
-python main.py \
-  --alert "time-series-query has read timeouts and socket growth" \
-  --namespace si \
-  --write-incident \
-  --incident-dir ~/sre-agent-runs/incidents \
-  --service time-series-query \
-  --target-repo /path/to/work/repo
-```
-
-This writes a Bob-ready incident directory containing `report.md`,
-`report.json`, `bob-task.md`, `validation-plan.md`, and `dispatch.json`.
-The SRE agent does not inspect, read, or modify the target repository; the
-`--target-repo` value is stored only as dispatch metadata.
-
-Run Bob separately from the target work-code repository. The generated Bob task
-requires Phase 1 repository grounding before any edits, then human approval of
-Phase 1 and Phase 2 before implementation.
-
 Render the trajectory to Markdown and a Mermaid sequence diagram:
 
 ```bash
@@ -384,6 +360,30 @@ The verifier gives a deterministic score for each model run. The renderer
 produces `trajectory.md` (step table + embedded diagram) and `trajectory.mmd`
 (Mermaid only), making it easy to compare tool usage and reasoning across
 models side by side.
+
+## Bob handoff workflow
+
+Use `--write-incident` when the SRE investigation should produce artifacts for
+a separate Bob code investigation:
+
+```bash
+python main.py \
+  --alert "time-series-query has read timeouts and socket growth" \
+  --namespace si \
+  --write-incident \
+  --incident-dir ~/sre-agent-runs/incidents \
+  --service time-series-query \
+  --target-repo /path/to/work/repo
+```
+
+This writes a Bob-ready incident directory containing `report.md`,
+`report.json`, `bob-task.md`, `validation-plan.md`, and `dispatch.json`.
+The SRE agent does not inspect, read, or modify the target repository; the
+`--target-repo` value is stored only as dispatch metadata.
+
+Run Bob separately from the target work-code repository. The generated Bob task
+requires Phase 1 repository grounding before any edits, then human approval of
+Phase 1 and Phase 2 before implementation.
 
 ## Files
 

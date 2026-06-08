@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,7 +23,9 @@ def _slugify(value: str) -> str:
 
 def _incident_id(*, created_at: datetime, service: str | None, alert: str) -> str:
     slug_source = service or alert
-    return f"{created_at.strftime('%Y%m%d-%H%M%S')}-{_slugify(slug_source)}"
+    suffix = uuid.uuid4().hex[:8]
+    timestamp = created_at.strftime("%Y%m%d-%H%M%S-%f")[:-3]
+    return f"{timestamp}-{_slugify(slug_source)}-{suffix}"
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -218,7 +221,7 @@ def write_incident_artifacts(
         "provider": provider,
         "config_path": config_path,
         "final_report": final_report,
-        "artifact_files": list(ARTIFACT_FILES.values()),
+        "artifact_files": ARTIFACT_FILES,
     }
     paths["report_json"].write_text(
         json.dumps(report_json, indent=2, sort_keys=True) + "\n",

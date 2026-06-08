@@ -1,4 +1,5 @@
 import json
+import re
 
 from sre_bridge.incident_writer import write_incident_artifacts
 
@@ -16,7 +17,10 @@ def test_write_incident_artifacts_creates_bob_handoff(tmp_path):
         target_repo="/path/to/work/repo",
     )
 
-    assert incident_path.name.endswith("-time-series-query")
+    assert re.match(
+        r"^\d{8}-\d{6}-\d{3}-time-series-query-[a-f0-9]{8}$",
+        incident_path.name,
+    )
     assert sorted(path.name for path in incident_path.iterdir()) == [
         "bob-task.md",
         "dispatch.json",
@@ -34,13 +38,13 @@ def test_write_incident_artifacts_creates_bob_handoff(tmp_path):
     report = json.loads((incident_path / "report.json").read_text(encoding="utf-8"))
     assert report["alert"] == "time-series-query has read timeouts and socket growth"
     assert report["service"] == "time-series-query"
-    assert report["artifact_files"] == [
-        "report.md",
-        "report.json",
-        "bob-task.md",
-        "validation-plan.md",
-        "dispatch.json",
-    ]
+    assert report["artifact_files"] == {
+        "report_md": "report.md",
+        "report_json": "report.json",
+        "bob_task": "bob-task.md",
+        "validation_plan": "validation-plan.md",
+        "dispatch": "dispatch.json",
+    }
 
     dispatch = json.loads((incident_path / "dispatch.json").read_text(encoding="utf-8"))
     assert dispatch["status"] == "ready_for_bob"
@@ -61,6 +65,34 @@ def test_incident_slug_falls_back_to_alert_when_service_missing(tmp_path):
         incident_dir=str(tmp_path),
     )
 
-    assert incident_path.name.endswith("-http-500s-in-api-checkout")
+    assert re.match(
+        r"^\d{8}-\d{6}-\d{3}-http-500s-in-api-checkout-[a-f0-9]{8}$",
+        incident_path.name,
+    )
     dispatch = json.loads((incident_path / "dispatch.json").read_text(encoding="utf-8"))
     assert dispatch["target_repo_path"] is None
+
+
+def test_incident_ids_are_collision_resistant(tmp_path):
+    first = write_incident_artifacts(
+        alert="same alert",
+        namespace="si",
+        final_report="first",
+        model="gpt-5.5",
+        provider="openai",
+        config_path="config.yaml",
+        incident_dir=str(tmp_path),
+        service="same-service",
+    )
+    second = write_incident_artifacts(
+        alert="same alert",
+        namespace="si",
+        final_report="second",
+        model="gpt-5.5",
+        provider="openai",
+        config_path="config.yaml",
+        incident_dir=str(tmp_path),
+        service="same-service",
+    )
+
+    assert first.name != second.name
